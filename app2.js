@@ -155,7 +155,7 @@ app.use('/', router);
 const authUser = function(db, id, password, callback) {
     console.log('authUser 호출됨 : ' + id + ', ' + password);
 
-    var users = db.collection('users');
+    const users = db.collection('users');
 
     users.find({"id":id, "password":password}).toArray(function(err, docs) {
         if (err) {

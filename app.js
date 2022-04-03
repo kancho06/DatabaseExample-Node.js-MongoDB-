@@ -99,6 +99,8 @@ router.route('/process/login').post(function(req, res) {
 
 
 
+app.use('/', router);
+
 
 // 호출해서 사용할 수 있는 함수를 만드는게 명확하다 (DB, api)
 // node.js는 비동기 방식을 선호하기 때문에 (코드안에 코드가 들어감 ex.콜백함수) 함수를 분리하는것이 좋다.
@@ -128,7 +130,7 @@ var authUser = function(db, id, password, callback) {
 };
 
 
-app.use('/', router);
+
 
 
 

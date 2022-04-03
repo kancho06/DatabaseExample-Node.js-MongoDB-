@@ -9,6 +9,9 @@ const expressSession = require('express-session');
 
 const expressErrorHandler = require('express-error-handler');
 
+// 암호화 모듈
+const crypto = require('crypto');
+
 // mongodb module
 const mongoose = require('mongoose');
 
@@ -30,14 +33,51 @@ function connectDB() {
         
 
         UserSchema = mongoose.Schema({
-            id: {type: String, required: true, unique: true},
-            password: {type: String, required: true},
-            name: {type: String, index:'hashed'},
+            id: {type: String, required: true, unique: true, 'default':''},
+            hashed_password: {type: String, required: true, 'default':''},
+            salt: {type: String, required: true},
+            name: {type: String, index:'hashed', 'default':''}, 
             age: {type: Number, 'default': -1},
             created: {type: Date, index:{unique:false}, 'default': Date.now()},
             updated: {type: Date, index:{unique:false}, 'default': Date.now()}
         });
         console.log('UserSchema 정의됨');
+
+        UserSchema
+            .virtual('password')
+            .set(function(password) {
+                this.salt = this.makeSalt();
+                this.hashed_password = this.encryptPassword(password);
+                console.log('virtual password 저장됨 : ' + this.hashed_password);
+                
+            });
+
+        // salt 값을 이용해서 비밀번호를 encoding(암호화) 한다.
+        // plainText는 유저가 지금 입력한 password이다
+        UserSchema.method('encryptPassword', function(plainText, inSalt) {
+            if (inSalt) {
+                return crypto.createHmac('sha1', inSalt).update(plainText).digest('hex');
+            } else {
+                return crypto.createHmac('sha1', this.salt).update(plainText).digest('hex');
+            }
+        });
+
+        // 매번 같은 salt로 encoding 을 해주면 보안의 문제가 있기때문에
+        // salt값을 매번 랜덤으로 생성해 준다.
+        UserSchema.method('makeSalt', function() {
+            return Math.round((new Date().valueOf() * Math.random())) + '';
+        });
+
+        // 비밀번호 대조
+        UserSchema.method('authenticate', function(plainText, inSalt, hashed_password) {
+            if (inSalt) {
+                console.log('authenticate 호출됨');
+                return this.encryptPassword(plainText, inSalt) === hashed_password;
+            } else {
+                console.log('authenticate 호출됨');
+                return this.encryptPassword(plainText) === hashed_password;
+            }
+        });
         
         // jpa에서 findByIdAndUserNickName과 같은 함수 비슷하게 쓰는 함수를 설정
         UserSchema.static('findById', function(id, callback) {
@@ -53,7 +93,7 @@ function connectDB() {
         //     return this.find({id:id}, callback);
         // }
         
-        UserModel = mongoose.model('users', UserSchema);
+        UserModel = mongoose.model('users3', UserSchema);
         console.log('UserModel 정의됨');
 
     });
@@ -239,7 +279,11 @@ const authUser = function(db, id, password, callback) {
 
         console.log('아이디 %s로 검색한 결과', id);
         if (results.length > 0) {
-            if (results[0]._doc.password === password) {
+            const user = new UserModel({id:id});
+            const authenticated = user.authenticate(password, results[0]._doc.salt,
+            results[0]._doc.hashed_password);
+
+            if (authenticated) {
                 console.log('비밀번호 일치함');
                 callback(null, results);
             } else {
